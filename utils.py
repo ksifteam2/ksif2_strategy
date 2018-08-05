@@ -34,11 +34,17 @@ def backtesting(back_obj, price_file, save_file=None, method='eq'):
 
     date_axis = pd.date_range(start_date, end_date, periods=len(price_val))
     plt.plot(date_axis, price_val)
+
+    if save_file:
+        plt.savefig(save_file)
+
     plt.show()
+
 
 if __name__ == "__main__":
     test_obj = {
         (datetime(2011, 1, 1), datetime(2012, 1, 1)):['A000010', 'A000120', 'A000200'],
         (datetime(2012, 1, 1), datetime(2013, 1, 1)):['A000110', 'A000220', 'A000300']
     }
-    backtesting(test_obj, './data/Adjusted Price.csv')
+    backtesting(test_obj, './data/Adjusted Price.csv', save_file="test.png")
+

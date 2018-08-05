@@ -21,6 +21,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import itertools
 import utils
+from collections import OrderedDict
 
 esg_weight = {'S': 150, 'A+': 120, 'A':100, 'B':90, 'B+':95, 'C':80, 'D':70, 'B이하':80}
 year_weight = {2011 : 1, 2012 : 2, 2013 : 3, 2014: 4, 2015 : 5, 2016: 6, 2017 : 7}
@@ -65,30 +66,8 @@ def init(df):
     
     return grouped_df
 
-def scoring(df, group_with='기업명', score_with="평가년도", scoring_dict=year_weight):
-    """ Score item given weight
-    Args:
-        param1: df (DataFrame to calculate)
-        param2: group_with (column name to group)
-        param3: score_with (scoring criteria)
-        param4: score_dict (scoring dictionary)
-    Return:
-        Series that is scored with standard.
-    """
-    score = df.groupby(group_with)              \
-              .apply(lambda x:                  \
-                        sum(x[score_with]       \
-                            .apply(             \
-                                lambda y: scoring_dict[y]
-                    )))
-    return score
-
 def normalize_score(df):
     """ Normalize ESG score with Min Max scoring
-    Args:
-        param1 : dataframe
-    Return:
-        normalized DataFrame
     """
     grouped = df.groupby(df.index.get_level_values(0))
     return (df - grouped.min()) / (grouped.max() - grouped.min())
@@ -110,17 +89,27 @@ def get_firm_benchmark_by_sector(df, sector, year, limit=3):
     """ Get benchmark firm list from dataframe based upon ESG score with sector
     """
     
-    ret = df[year].loc[sector].sum(axis=1).sort_values(ascending=False)[:limit]
+    ret = df[year].sum(axis=1).groupby('산업명-대분류').head(limit)
     return ret
 
-def get_firm_benchmark(df, year, limit=3):
+def get_firm_benchmark(df, from_year, to_year, limit=3, percentage=0.75):
     """ Get benchmark firm list from dataframe based upon ESG score with all
     """
+    ret = OrderedDict()
     sector_all = df.index.levels[0]
-    ret = []
-    for sector in sector_all:
-        ret.append(get_firm_benchmark_by_sector(df, sector, year, limit))
-    return pd.concat(ret)
+    periods = range(from_year, to_year)
+
+    for idx, period in enumerate(periods):
+        if idx == 0:
+            continue
+
+        start_date = periods[idx - 1]
+        end_date = periods[idx]
+
+        year_firms = get_firm_benchmark_by_sector(df, sector_all, start_date, limit).index.get_level_values(2)
+        ret[(datetime(start_date, 1, 1), datetime(end_date, 1, 1))] = year_firms.values
+
+    return ret
 
 def get_firm_momentum_one_period(df, year):
     """ Helper function of ESG Momentum
@@ -182,20 +171,15 @@ if __name__ == "__main__":
 
     period_list = list(zip(range(2011, 2017), range(2012, 2018)))
     bm_return = pd.Series([1], index=[datetime(2011, 6, 30)])
-    
-    init_seed = 1
-    for period in period_list:
-        bm_list = get_firm_benchmark(maindf, period[0]).index
-        print("{}: \n {}".format(period,", ".join(bm_list.get_level_values('기업코드').values)))
-        return_series = get_return_series(bm_list.get_level_values('기업코드'), (period[0], period[1])) + 1
-        bm_return = bm_return.append(return_series * init_seed)
-        init_seed = return_series.cumprod().iloc[-1]
-        print("**{}**".format(init_seed))
+
+    bm_list = get_firm_benchmark(maindf, 2011, 2018)
+    utils.backtesting(bm_list, './data/Adjusted Price.csv')
+    # init_seed = 1
+    # for period in period_list:
+    #     bm_list = get_firm_benchmark(maindf, period[0]).index
+    #     print("{}: \n {}".format(period,", ".join(bm_list.get_level_values('기업코드').values)))
+    #     return_series = get_return_series(bm_list.get_level_values('기업코드'), (period[0], period[1])) + 1
+    #     bm_return = bm_return.append(return_series * init_seed)
+    #     init_seed = return_series.cumprod().iloc[-1]
+    #     print("**{}**".format(init_seed))
         # print(init_seed)
-    # print(bm_return)
-    # plt.plot(bm_return)
-    # plt.show()
-    # bm_list = get_firm_benchmark(maindf).index.get_level_values('기업코드')
-    # bm_return = get_return_series(temp, (2012, 2013))
-    # plt.plot(bm_return)
-    # plt.show()
